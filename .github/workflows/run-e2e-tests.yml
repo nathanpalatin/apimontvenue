@@ -13,9 +13,9 @@ jobs:
         ports:
         - 5432:5432
         env:
-        - POSTGRESQL_PASSWORD=docker
-        - POSTGRESQL_USERNAME=docker
-        - POSTGRESQL_DATABASE=montvenue
+          POSTGRESQL_PASSWORD: docker
+          POSTGRESQL_USERNAME: docker
+          POSTGRESQL_DATABASE: montvenue
 
     steps:
       - uses: actions/checkout@v4
