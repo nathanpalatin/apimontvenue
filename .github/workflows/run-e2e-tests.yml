@@ -18,9 +18,7 @@ jobs:
           POSTGRESQL_DATABASE: database_name
           CLOUDFLARE_ENDPOINT: cloudflare.com
           CLOUDFLARE_ACCESS_KEY_ID: access_key
-          CLOUDFLARE_SECRET_ACCESS_KEY: d12312f5g34g34ok
-          JWT_SECRET_KEY: testing
-          DATABASE_URL: "postgresql://docker:docker@localhost:5432/montvenue?schema=public"
+          CLOUDFLARE_SECRET_ACCESS_KEY: d12312f5g34g34odas
 
     steps:
       - uses: actions/checkout@v4
@@ -31,4 +29,6 @@ jobs:
 
       - run: npm ci
       - run: npm run test:e2e         
-        
+        env:
+          JWT_SECRET_KEY: testing
+          DATABASE_URL: postgresql://docker:docker@localhost:5432/montvenue?schema=public
