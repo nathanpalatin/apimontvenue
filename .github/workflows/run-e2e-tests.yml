@@ -8,11 +8,11 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      api-montvenue-pg:
+      postgres:
         image: bitnami/postgresql:latest
         ports:
         - 5432:5432
-        environment:
+        env:
         - POSTGRESQL_PASSWORD=docker
         - POSTGRESQL_USERNAME=docker
         - POSTGRESQL_DATABASE=montvenue
