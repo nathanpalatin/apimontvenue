@@ -19,8 +19,8 @@ model Users {
   name               String
   email              String          @unique
   password           String
-  cpf                String?         @default("99999999999")
-  birthdate          DateTime?       @default(now())
+  cpf                String          @unique
+  birthdate          String        
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
   avatar             String?
@@ -29,32 +29,9 @@ model Users {
   emailVerified      Boolean         @default(false)
 
   
-  Chats              Chats[]
-  Followers          Followers[]
-  Medias             Medias[]
-  Messages           Messages[]
-  NotificationSender Notifications[] @relation("senderUserId")
-  Posts              Posts[]
-  Products           Products[]
   Transactions       Transactions[]
-  Wallets            Wallets[]
-  Notifications      Notifications[]
 
   @@map("users")
-}
-
-model Products {
-  id          String  @id @default(uuid())
-  title       String
-  slug        String  @unique
-  price       Float
-  image       String
-  description String
-  featured    Boolean
-  userId      String
-  user        Users   @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("products")
 }
 
 model Transactions {
@@ -68,93 +45,4 @@ model Transactions {
   user      Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("transactions")
-}
-
-model Posts {
-  id        String   @id @default(uuid())
-  title     String
-  content   String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  userId    String
-  medias    Medias[]
-  user      Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("posts")
-}
-
-model Medias {
-  id        String   @id @default(uuid())
-  type      String   @default("FILE")
-  source    String
-  userId    String
-  postId    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  Posts     Posts?   @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user      Users    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("medias")
-}
-
-model Followers {
-  id          String @id @default(uuid())
-  userId      String
-  followingId String
-  Users       Users  @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("followers")
-}
-
-model Chats {
-  id         String     @id @default(uuid())
-  userId     String
-  chatWithId String
-  createdAt  DateTime   @default(now()) @map("created_at")
-  updatedAt  DateTime   @updatedAt @map("updated_at")
-  Users      Users      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  Messages   Messages[]
-
-  @@map("chats")
-}
-
-model Messages {
-  id            String   @id @default(uuid())
-  sendUserId    String
-  receiveUserId String
-  messageText   String
-  messageType   String
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  chatId        String
-  Chats         Chats    @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  Users         Users    @relation(fields: [sendUserId], references: [id], onDelete: Cascade)
-
-  @@map("messages")
-}
-
-model Notifications {
-  id               String   @id @default(uuid())
-  notificationType String
-  sendUserId       String?
-  receiveUserId    String
-  status           String   @default("unread")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  Users        Users  @relation(fields: [receiveUserId], references: [id], onDelete: Cascade)
-  senderUserId Users? @relation("senderUserId", fields: [sendUserId], references: [id])
-
-  @@map("notifications")
-}
-
-model Wallets {
-  id       String @id @default(uuid())
-  balance  Int
-  coinType String
-  country  String @default("pt-br")
-  userId   String
-  Users    Users  @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("wallets")
 }

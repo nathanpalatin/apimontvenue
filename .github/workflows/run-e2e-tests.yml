@@ -1,6 +1,6 @@
 name: Run E2E Tests
 
-on: [pull_request]
+on: [push]
 
 jobs:
   run-e2e-tests:
@@ -26,7 +26,7 @@ jobs:
 
       - run: npm ci
       - run: npm run test:e2e        
-       
+
         env:
           JWT_SECRET_KEY: testing
           DATABASE_URL: postgresql://docker:docker@localhost:5432/montvenue?schema=public

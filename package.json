@@ -7,7 +7,7 @@
     "dev": "tsx watch src/server.ts",
     "start": "node build/server.js",
     "lint": "eslint \"src/**/*.ts\" --fix",
-    "test": "vitest run src/routes/users.spec.ts",
+    "test": "vitest run",
     "test:create-prisma-environment": "npm link ./prisma/vitest-environment-prisma",
     "test:install-prisma-environment": "npm link vitest-environment-prisma",
     "test:watch": "vitest",
