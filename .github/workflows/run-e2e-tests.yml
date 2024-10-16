@@ -16,6 +16,10 @@ jobs:
           POSTGRESQL_PASSWORD: docker
           POSTGRESQL_USERNAME: docker
           POSTGRESQL_DATABASE: montvenue
+          CLOUDFLARE_ENDPOINT: github.com
+          CLOUDFLARE_ACCESS_KEY_ID: elf24gg4455
+          CLOUDFLARE_SECRET_ACCESS_KEY: dbc85f5076ab1e7bffd933de00a6683127c2d436ff42a74cdc541
+          BLOB_READ_WRITE_TOKEN: 23lf04k95i9gj293295j2539
 
     steps:
       - uses: actions/checkout@v4
