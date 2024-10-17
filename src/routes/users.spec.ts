@@ -38,6 +38,7 @@ describe('Users routes (e2e)', () => {
 				password: await hash('123456', 1)
 			})
 
+
 		expect(userResponse.statusCode).toEqual(201)
 	})
 
