@@ -49,16 +49,29 @@ app.setErrorHandler(errorHandler)
 app.register(fastifySwagger, {
 	openapi: {
 		info: {
-			title: 'API NODE Rest',
-			description: 'by Nathan Palatin.',
-			version: '1.0.0'
+			title: 'Montvenue',
+			description: 'Montvenue API Routes.',
+			version: '1.0',
+			contact: {
+				name: 'Nathan Palatin',
+				url: 'https://github.com/nathanpalatin'
+			},
+			license: {
+				name: 'MIT',
+				url: 'https://opensource.org/licenses/MIT'
+			}
 		}
 	},
 	transform: jsonSchemaTransform
 })
 
 app.register(fastifySwaggerUI, {
-	routePrefix: '/docs'
+	routePrefix: '/docs',
+	staticCSP: true,
+	transformSpecification: (swaggerObject, req, reply) => {
+		return swaggerObject
+	},
+	transformSpecificationClone: true
 })
 
 app.register(cookie)

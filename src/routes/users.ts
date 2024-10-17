@@ -1,14 +1,7 @@
-import { env } from '../env'
-
-import fs from 'node:fs'
-import util from 'node:util'
-import { pipeline } from 'node:stream'
-
 import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import { z } from 'zod'
 
 import { FastifyInstance } from 'fastify'
-import { put } from '@vercel/blob'
 
 import { prisma } from '../lib/prisma'
 
@@ -24,8 +17,10 @@ import {
 	getUserParamsSchema,
 	updateUserSchemaBody
 } from '../@types/zod/user'
-import { BadRequestError } from './_errors/bad-request-error'
+
 import { makeRegisterUseCase } from '../use-cases/factories/make-register-use-case'
+
+import { BadRequestError } from './_errors/bad-request-error'
 import { UserAlreadyExistsError } from '../use-cases/errors/user-already-exists-error'
 
 interface QueryParams {
@@ -34,38 +29,58 @@ interface QueryParams {
 }
 
 export async function usersRoutes(app: FastifyInstance) {
-	app.post('/', async (request, reply) => {
-		const { name, email, password, phone, cpf, birthdate } = createUserSchemaBody.parse(request.body)
-		try {
-			const registerUseCase = makeRegisterUseCase()
-
-			await registerUseCase.execute({
-				name,
-				cpf,
-				phone,
-				birthdate,
-				email,
-				password
-			})
-		} catch (err) {
-			if (err instanceof UserAlreadyExistsError) {
-				return reply.status(409).send({ message: err.message })
-			}
-
-			throw err
-		}
-		return reply.status(201).send({ message: 'User created successfully.' })
-	})
-
-	app.put(
+	app.withTypeProvider<ZodTypeProvider>().post(
 		'/',
 		{
-			preHandler: [checkSessionIdExists]
+			schema: {
+				tags: ['Authentication'],
+				summary: 'Create new user',
+				body: createUserSchemaBody,
+				response: {
+					201: z.object({
+						message: z.string()
+					})
+				}
+			}
+		},
+		async (request, reply) => {
+			const { name, email, password, phone, cpf, birthdate } = createUserSchemaBody.parse(request.body)
+			try {
+				const registerUseCase = makeRegisterUseCase()
+
+				await registerUseCase.execute({
+					name,
+					cpf,
+					phone,
+					birthdate,
+					email,
+					password
+				})
+			} catch (error) {
+				if (error instanceof UserAlreadyExistsError) {
+					return reply.status(409).send({ message: error.message })
+				}
+
+				throw error
+			}
+			return reply.status(201).send({ message: 'User created successfully.' })
+		}
+	)
+
+	app.withTypeProvider<ZodTypeProvider>().put(
+		'/',
+		{
+			preHandler: [checkSessionIdExists],
+			schema: {
+				tags: ['Authentication'],
+				summary: 'Update info user',
+				body: updateUserSchemaBody
+			}
 		},
 		async (request, reply) => {
 			const { userId: id } = getTokenHeaderSchema.parse(request.headers)
 
-			const { name, phone, avatar } = updateUserSchemaBody.parse(request.body)
+			const { name, phone } = updateUserSchemaBody.parse(request.body)
 
 			try {
 				await prisma.users.update({
@@ -75,99 +90,150 @@ export async function usersRoutes(app: FastifyInstance) {
 					data: {
 						name,
 						updatedAt: new Date(),
-						phone,
-						avatar
+						phone
 					}
 				})
 			} catch (error) {
 				throw new BadRequestError('Internal server error.')
 			}
 
-			return reply.status(204).send('User updated successfully!')
+			return reply.status(204).send({ message: 'User updated successfully!' })
 		}
 	)
 
-	app.post('/login', async (request, reply) => {
-		const { credential, password } = createLoginSchemaBody.parse(request.body)
-
-		const user = await prisma.users.findFirst({
-			where: {
-				OR: [{ email: credential }, { cpf: credential }]
+	app.withTypeProvider<ZodTypeProvider>().post(
+		'/login',
+		{
+			schema: {
+				tags: ['Authentication'],
+				summary: 'Authenticate user',
+				body: createLoginSchemaBody,
+				response: {
+					200: z.object({
+						token: z.string(),
+						refreshToken: z.string(),
+						user: z.object({
+							role: z.string(),
+							id: z.string(),
+							name: z.string(),
+							avatar: z.string().nullable()
+						})
+					})
+				}
 			}
-		})
+		},
+		async (request, reply) => {
+			const { credential, password } = createLoginSchemaBody.parse(request.body)
 
-		if (!user) {
-			throw new BadRequestError('Invalid credentials.')
-		}
-
-		const isValidPassword = await compare(password, user.password)
-
-		if (!isValidPassword) {
-			throw new BadRequestError('Invalid password.')
-		}
-
-		const token = await reply.jwtSign({ userId: user.id, role: user.role }, { expiresIn: '1h' })
-
-		const refreshToken = await reply.jwtSign({ userId: user.id, role: user.role }, { expiresIn: '7d' })
-
-		return reply
-			.setCookie('refreshToken', refreshToken, {
-				path: '/',
-				secure: true,
-				httpOnly: true,
-				sameSite: true
-			})
-			.status(200)
-			.send({
-				token,
-				refreshToken,
-				user: {
-					role: user.role,
-					id: user.id,
-					name: user.name,
-					avatar: user.avatar
+			const user = await prisma.users.findFirst({
+				where: {
+					OR: [{ email: credential }, { cpf: credential }]
 				}
 			})
-	})
 
-	app.patch('/token/refresh', async (request, reply) => {
-		const { refreshToken } = getRefreshTokenSchema.parse(request.cookies)
+			if (!user) {
+				throw new BadRequestError('Invalid credentials.')
+			}
 
-		if (!refreshToken) {
-			throw new BadRequestError('Refresh token not found.')
-		}
-		try {
-			const decoded = (await app.jwt.verify(refreshToken)) as { userId: string; role: string }
+			const isValidPassword = await compare(password, user.password)
 
-			const token = await reply.jwtSign({ userId: decoded.userId, role: decoded.role }, { expiresIn: '1h' })
+			if (!isValidPassword) {
+				throw new BadRequestError('Invalid password.')
+			}
 
-			return reply.status(200).send({ token, refreshToken })
-		} catch (error) {
-			const decoded = (await app.jwt.verify(refreshToken)) as { userId: string; role: string }
+			const token = await reply.jwtSign({ userId: user.id, role: user.role }, { expiresIn: '1h' })
 
-			const newRefreshToken = await reply.jwtSign(
-				{ userId: decoded.userId, role: decoded.role },
-				{ expiresIn: '7d' }
-			)
-
-			const token = await reply.jwtSign({ userId: decoded.userId, role: decoded.role }, { expiresIn: '1h' })
+			const refreshToken = await reply.jwtSign({ userId: user.id, role: user.role }, { expiresIn: '7d' })
 
 			return reply
-				.setCookie('refreshToken', newRefreshToken, {
+				.setCookie('refreshToken', refreshToken, {
 					path: '/',
 					secure: true,
 					httpOnly: true,
 					sameSite: true
 				})
 				.status(200)
-				.send({ token, refreshToken: newRefreshToken })
+				.send({
+					token,
+					refreshToken,
+					user: {
+						role: user.role,
+						id: user.id,
+						name: user.name,
+						avatar: user.avatar
+					}
+				})
 		}
-	})
+	)
 
-	app.get<{ Querystring: QueryParams }>(
+	app.withTypeProvider<ZodTypeProvider>().patch(
+		'/token/refresh',
+		{
+			schema: {
+				tags: ['Authentication'],
+				summary: 'Refresh JWT token',
+				response: {
+					200: z.object({
+						token: z.string(),
+						refreshToken: z.string()
+					})
+				}
+			}
+		},
+		async (request, reply) => {
+			const { refreshToken } = getRefreshTokenSchema.parse(request.cookies)
+
+			if (!refreshToken) {
+				throw new BadRequestError('Refresh token not found.')
+			}
+			try {
+				const decoded = (await app.jwt.verify(refreshToken)) as { userId: string; role: string }
+
+				const token = await reply.jwtSign({ userId: decoded.userId, role: decoded.role }, { expiresIn: '1h' })
+
+				return reply.status(200).send({ token, refreshToken })
+			} catch (error) {
+				const decoded = (await app.jwt.verify(refreshToken)) as { userId: string; role: string }
+
+				const newRefreshToken = await reply.jwtSign(
+					{ userId: decoded.userId, role: decoded.role },
+					{ expiresIn: '7d' }
+				)
+
+				const token = await reply.jwtSign({ userId: decoded.userId, role: decoded.role }, { expiresIn: '1h' })
+
+				return reply
+					.setCookie('refreshToken', newRefreshToken, {
+						path: '/',
+						secure: true,
+						httpOnly: true,
+						sameSite: true
+					})
+					.status(200)
+					.send({ token, refreshToken: newRefreshToken })
+			}
+		}
+	)
+
+	app.withTypeProvider<ZodTypeProvider>().get<{ Querystring: QueryParams }>(
 		'/',
 		{
-			preHandler: [checkSessionIdExists]
+			preHandler: [checkSessionIdExists],
+			schema: {
+				tags: ['Users'],
+				summary: 'List users',
+				response: {
+					200: z.object({
+						users: z.array(
+							z.object({
+								id: z.string(),
+								name: z.string(),
+								avatar: z.string().nullable()
+							})
+						)
+					})
+				}
+			}
 		},
 		async (request, reply) => {
 			const limit = parseInt(request.query.limit || '10', 10)
@@ -187,67 +253,11 @@ export async function usersRoutes(app: FastifyInstance) {
 				skip: offset
 			})
 
+			if (!users) {
+				throw new BadRequestError('No users found.')
+			}
+
 			return reply.status(200).send({ users })
-		}
-	)
-
-	app.patch(
-		'/avatar',
-		{
-			preHandler: [checkSessionIdExists]
-		},
-		async (request, reply) => {
-			const { userId: id } = getTokenHeaderSchema.parse(request.headers)
-			const part = await request.file()
-
-			if (!part || part.mimetype !== 'image/png') {
-				return reply.status(400).send({ error: 'No file found' })
-			}
-
-			const timestamp = new Date().getTime()
-			const extension = part.filename.split('.').pop()
-			const newFilename = `${timestamp}.${extension}`
-			const folder = `uploads/users/avatar/${id}`
-			const filePath = `${folder}/${newFilename}`
-
-			if (!fs.existsSync(folder)) {
-				fs.mkdirSync(folder, { recursive: true })
-			}
-
-			await util.promisify(pipeline)(part.file, fs.createWriteStream(filePath))
-
-			const { url } = await put(filePath, 'blob', {
-				access: 'public',
-				token: env.BLOB_READ_WRITE_TOKEN
-			})
-
-			await prisma.users.update({
-				where: { id },
-				data: { avatar: filePath }
-			})
-
-			return reply.status(200).send({ url })
-		}
-	)
-
-	app.patch(
-		'/:id',
-		{
-			preHandler: [checkSessionIdExists]
-		},
-		async (request, reply) => {
-			const { userId: id } = getTokenHeaderSchema.parse(request.headers)
-
-			await prisma.users.update({
-				data: {
-					emailVerified: false
-				},
-				where: {
-					id
-				}
-			})
-
-			reply.status(204).send({ message: 'User has been disabled successfully.' })
 		}
 	)
 
@@ -330,7 +340,7 @@ export async function usersRoutes(app: FastifyInstance) {
 		{
 			preHandler: [checkSessionIdExists],
 			schema: {
-				tags: ['Auth'],
+				tags: ['Authentication'],
 				summary: 'Get authenticated user profile',
 				response: {
 					200: z.object({

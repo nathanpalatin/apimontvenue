@@ -7,7 +7,7 @@ export default defineConfig({
 		environmentMatchGlobs: [['src/routes/**', 'prisma']],
 		dir: 'src',
 		coverage: {
-			include: ['src/routes']
+			include: ['src/use-cases', 'src/routes']
 		}
 	}
 })
